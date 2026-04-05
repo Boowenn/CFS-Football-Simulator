@@ -1,0 +1,16 @@
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Backups (contain save file copies)
+backups/
+
+# IDE
+.vscode/
+.idea/
