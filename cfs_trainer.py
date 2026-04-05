@@ -372,6 +372,16 @@ class TrainerApp:
 
         self.player_id_var = tk.IntVar(value=0)
 
+        # 先放按钮到底部，再放滚动区域，避免按钮被挤出
+        btn_frame = ttk.Frame(right)
+        btn_frame.pack(side="bottom", fill="x", pady=5)
+        ttk.Button(btn_frame, text="保存此球员", style="Success.TButton",
+                   command=self._save_player).pack(fill="x", padx=5, pady=2)
+        ttk.Button(btn_frame, text="一键满属性", style="Warning.TButton",
+                   command=self._max_player).pack(fill="x", padx=5, pady=2)
+        ttk.Button(btn_frame, text="全队满属性", style="Warning.TButton",
+                   command=self._max_all_team_players).pack(fill="x", padx=5, pady=2)
+
         edit_canvas = tk.Canvas(right, bg=self.colors["bg"], highlightthickness=0)
         edit_scrollbar = ttk.Scrollbar(right, orient="vertical", command=edit_canvas.yview)
         edit_inner = ttk.Frame(edit_canvas)
@@ -379,8 +389,8 @@ class TrainerApp:
         edit_inner.bind("<Configure>", lambda e: edit_canvas.configure(scrollregion=edit_canvas.bbox("all")))
         edit_canvas.create_window((0, 0), window=edit_inner, anchor="nw")
         edit_canvas.configure(yscrollcommand=edit_scrollbar.set)
-        edit_canvas.pack(side="left", fill="both", expand=True)
         edit_scrollbar.pack(side="right", fill="y")
+        edit_canvas.pack(side="left", fill="both", expand=True)
         # 鼠标滚轮
         edit_canvas.bind("<MouseWheel>", lambda e: edit_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
 
@@ -412,15 +422,6 @@ class TrainerApp:
             var = tk.StringVar()
             self.player_attr_vars[field] = var
             ttk.Entry(fr, textvariable=var, width=10).pack(side="left", padx=3)
-
-        btn_frame = ttk.Frame(right)
-        btn_frame.pack(fill="x", pady=5)
-        ttk.Button(btn_frame, text="保存此球员", style="Success.TButton",
-                   command=self._save_player).pack(fill="x", padx=5, pady=2)
-        ttk.Button(btn_frame, text="一键满属性", style="Warning.TButton",
-                   command=self._max_player).pack(fill="x", padx=5, pady=2)
-        ttk.Button(btn_frame, text="全队满属性", style="Warning.TButton",
-                   command=self._max_all_team_players).pack(fill="x", padx=5, pady=2)
 
     # ─── Tab 3: 球队编辑 ────────────────────────────────
     def _build_tab_team(self):
@@ -512,26 +513,79 @@ class TrainerApp:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text=" 青训球员 ")
 
+        # 顶部搜索/筛选栏
         search_frame = ttk.Frame(tab)
         search_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Button(search_frame, text="加载青训球员", style="Accent.TButton",
+        ttk.Label(search_frame, text="筛选：").pack(side="left")
+        self.youth_filter = ttk.Combobox(search_frame,
+                                          values=["我的青训球员", "全部青训球员"],
+                                          width=14, state="readonly")
+        self.youth_filter.set("我的青训球员")
+        self.youth_filter.pack(side="left", padx=5)
+        ttk.Button(search_frame, text="加载", style="Accent.TButton",
                    command=self._load_youth).pack(side="left", padx=3)
-        ttk.Button(search_frame, text="全部青训球员满潜力", style="Warning.TButton",
+        ttk.Button(search_frame, text="全部满潜力", style="Warning.TButton",
                    command=self._max_youth).pack(side="left", padx=3)
 
+        # 主体区域：左侧列表 + 右侧编辑
+        body = ttk.Frame(tab)
+        body.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # 左侧列表
+        left = ttk.Frame(body)
+        left.pack(side="left", fill="both", expand=True)
+
         cols = ("ID", "姓名", "年龄", "位置", "能力", "潜力", "成长", "纪律")
-        self.youth_tree = ttk.Treeview(tab, columns=cols, show="headings", height=15)
+        self.youth_tree = ttk.Treeview(left, columns=cols, show="headings", height=15)
         for col in cols:
             w = 50 if col != "姓名" else 120
             self.youth_tree.heading(col, text=col)
             self.youth_tree.column(col, width=w, anchor="center")
         self.youth_tree.column("姓名", anchor="w")
-        scrollbar = ttk.Scrollbar(tab, orient="vertical", command=self.youth_tree.yview)
+        scrollbar = ttk.Scrollbar(left, orient="vertical", command=self.youth_tree.yview)
         self.youth_tree.configure(yscrollcommand=scrollbar.set)
-        self.youth_tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=5)
-        scrollbar.pack(side="right", fill="y", padx=(0, 10), pady=5)
+        self.youth_tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        self.youth_tree.bind("<<TreeviewSelect>>", self._on_youth_select)
 
-        self.youth_tree.bind("<Double-1>", self._edit_youth_player)
+        # 右侧编辑面板
+        right = ttk.Frame(body, width=250)
+        right.pack(side="right", fill="y", padx=(10, 0))
+        right.pack_propagate(False)
+
+        ttk.Label(right, text="青训球员编辑", font=("Microsoft YaHei UI", 11, "bold"),
+                  foreground=self.colors["accent"]).pack(pady=(0, 5))
+
+        self.youth_name_var = tk.StringVar(value="未选择球员")
+        ttk.Label(right, textvariable=self.youth_name_var,
+                  font=("Microsoft YaHei UI", 10)).pack()
+
+        self.youth_id_var = tk.IntVar(value=0)
+
+        # 底部按钮先放
+        youth_btn_frame = ttk.Frame(right)
+        youth_btn_frame.pack(side="bottom", fill="x", pady=5)
+        ttk.Button(youth_btn_frame, text="保存此球员", style="Success.TButton",
+                   command=self._save_youth_player).pack(fill="x", padx=5, pady=2)
+        ttk.Button(youth_btn_frame, text="一键满潜力", style="Warning.TButton",
+                   command=self._max_single_youth).pack(fill="x", padx=5, pady=2)
+
+        # 编辑字段
+        self.youth_attr_vars = {}
+        youth_fields = [
+            ("AbilityLevel", "能力等级"), ("PotentialLevel", "潜力等级"),
+            ("GrowthLevel", "成长速度"), ("DisciplineLevel", "纪律等级"),
+            ("FinancialLevel", "经济等级"), ("Age", "年龄"),
+            ("Height", "身高"), ("Weight", "体重"),
+            ("InvestedMoney", "已投入资金"),
+        ]
+        for field, label in youth_fields:
+            fr = ttk.Frame(right)
+            fr.pack(fill="x", padx=5, pady=2)
+            ttk.Label(fr, text=f"{label}：", width=10, anchor="e").pack(side="left")
+            var = tk.StringVar()
+            self.youth_attr_vars[field] = var
+            ttk.Entry(fr, textvariable=var, width=10).pack(side="left", padx=3)
 
     # ═══════════════════════════════════════════════════════
     #  数据加载
@@ -971,10 +1025,25 @@ class TrainerApp:
             return
         for item in self.youth_tree.get_children():
             self.youth_tree.delete(item)
-        rows = self.db.fetchall(
-            "SELECT ID,PlayerName,Age,Position,AbilityLevel,PotentialLevel,"
-            "GrowthLevel,DisciplineLevel FROM YouthPlayers ORDER BY PotentialLevel DESC"
-        )
+
+        filter_type = self.youth_filter.get()
+        if filter_type == "我的青训球员":
+            misc = self.db.fetchone("SELECT UserTeamID FROM Misc")
+            if misc:
+                rows = self.db.fetchall(
+                    "SELECT ID,PlayerName,Age,Position,AbilityLevel,PotentialLevel,"
+                    "GrowthLevel,DisciplineLevel FROM YouthPlayers "
+                    "WHERE AssociatedTeamID=? ORDER BY PotentialLevel DESC",
+                    (misc["UserTeamID"],)
+                )
+            else:
+                rows = []
+        else:
+            rows = self.db.fetchall(
+                "SELECT ID,PlayerName,Age,Position,AbilityLevel,PotentialLevel,"
+                "GrowthLevel,DisciplineLevel FROM YouthPlayers ORDER BY PotentialLevel DESC"
+            )
+
         for r in rows:
             self.youth_tree.insert("", "end", values=(
                 r["ID"], r["PlayerName"] or "", r["Age"] or 0,
@@ -983,69 +1052,83 @@ class TrainerApp:
                 r["DisciplineLevel"] or 0
             ), iid=str(r["ID"]))
 
-    def _max_youth(self):
-        if not self._require_db(): return
-        if not messagebox.askyesno("确认", "将全部青训球员的潜力和成长拉满？"):
-            return
-        self.db.execute(
-            "UPDATE YouthPlayers SET PotentialLevel=10,GrowthLevel=10,"
-            "AbilityLevel=CASE WHEN AbilityLevel<8 THEN 8 ELSE AbilityLevel END,"
-            "DisciplineLevel=10"
-        )
-        self.db.commit()
-        self._load_youth()
-        self._show_success("全部青训球员已拉满")
-
-    def _edit_youth_player(self, event):
+    def _on_youth_select(self, event):
         sel = self.youth_tree.selection()
         if not sel:
             return
         yid = int(sel[0])
+        self.youth_id_var.set(yid)
         row = self.db.fetchone("SELECT * FROM YouthPlayers WHERE ID=?", (yid,))
         if not row:
             return
+        self.youth_name_var.set(f"{row['PlayerName']}  (ID: {yid})")
+        for field in self.youth_attr_vars:
+            val = row[field]
+            self.youth_attr_vars[field].set(str(val) if val is not None else "0")
 
-        win = tk.Toplevel(self.root)
-        win.title(f"编辑青训球员 - {row['PlayerName']}")
-        win.geometry("350x350")
-        win.configure(bg=self.colors["bg"])
-        win.transient(self.root)
-        win.grab_set()
+    def _save_youth_player(self):
+        if not self._require_db():
+            return
+        yid = self.youth_id_var.get()
+        if yid == 0:
+            messagebox.showwarning("提示", "请先选择一个青训球员")
+            return
+        sets = []
+        vals = []
+        for field, var in self.youth_attr_vars.items():
+            try:
+                v = int(var.get().replace(",", "").strip())
+            except ValueError:
+                v = 0
+            sets.append(f"{field}=?")
+            vals.append(v)
+        vals.append(yid)
+        self.db.execute(f"UPDATE YouthPlayers SET {','.join(sets)} WHERE ID=?", vals)
+        self.db.commit()
+        self._load_youth()
+        self._show_success(f"青训球员 (ID:{yid}) 已保存")
 
-        fields = [
-            ("AbilityLevel", "能力等级"), ("PotentialLevel", "潜力等级"),
-            ("GrowthLevel", "成长速度"), ("DisciplineLevel", "纪律等级"),
-            ("FinancialLevel", "经济等级"), ("Age", "年龄"),
-            ("Height", "身高"), ("Weight", "体重"),
-            ("InvestedMoney", "已投入资金"),
-        ]
-        vars_map = {}
-        for i, (field, label) in enumerate(fields):
-            fr = ttk.Frame(win)
-            fr.pack(fill="x", padx=15, pady=3)
-            ttk.Label(fr, text=f"{label}：", width=12, anchor="e").pack(side="left")
-            var = tk.StringVar(value=str(row[field]) if row[field] is not None else "0")
-            vars_map[field] = var
-            ttk.Entry(fr, textvariable=var, width=12).pack(side="left", padx=5)
+    def _max_single_youth(self):
+        if not self._require_db():
+            return
+        yid = self.youth_id_var.get()
+        if yid == 0:
+            messagebox.showwarning("提示", "请先选择一个青训球员")
+            return
+        self.youth_attr_vars["AbilityLevel"].set("10")
+        self.youth_attr_vars["PotentialLevel"].set("10")
+        self.youth_attr_vars["GrowthLevel"].set("10")
+        self.youth_attr_vars["DisciplineLevel"].set("10")
+        self.youth_attr_vars["FinancialLevel"].set("10")
+        self._save_youth_player()
 
-        def save():
-            sets = []
-            vals = []
-            for field, var in vars_map.items():
-                try:
-                    v = int(var.get().strip())
-                except ValueError:
-                    v = 0
-                sets.append(f"{field}=?")
-                vals.append(v)
-            vals.append(yid)
-            self.db.execute(f"UPDATE YouthPlayers SET {','.join(sets)} WHERE ID=?", vals)
-            self.db.commit()
-            self._load_youth()
-            win.destroy()
-            self._show_success(f"青训球员 {row['PlayerName']} 已保存")
-
-        ttk.Button(win, text="保存", style="Success.TButton", command=save).pack(pady=15)
+    def _max_youth(self):
+        if not self._require_db(): return
+        filter_type = self.youth_filter.get()
+        if filter_type == "我的青训球员":
+            msg = "将我的青训球员的潜力和成长拉满？"
+            misc = self.db.fetchone("SELECT UserTeamID FROM Misc")
+            if not misc:
+                return
+            if not messagebox.askyesno("确认", msg):
+                return
+            self.db.execute(
+                "UPDATE YouthPlayers SET PotentialLevel=10,GrowthLevel=10,"
+                "AbilityLevel=CASE WHEN AbilityLevel<8 THEN 8 ELSE AbilityLevel END,"
+                "DisciplineLevel=10 WHERE AssociatedTeamID=?",
+                (misc["UserTeamID"],)
+            )
+        else:
+            if not messagebox.askyesno("确认", "将全部青训球员的潜力和成长拉满？"):
+                return
+            self.db.execute(
+                "UPDATE YouthPlayers SET PotentialLevel=10,GrowthLevel=10,"
+                "AbilityLevel=CASE WHEN AbilityLevel<8 THEN 8 ELSE AbilityLevel END,"
+                "DisciplineLevel=10"
+            )
+        self.db.commit()
+        self._load_youth()
+        self._show_success("青训球员已拉满")
 
     # ─── 工具 ────────────────────────────────────────────
     def _show_success(self, msg):
