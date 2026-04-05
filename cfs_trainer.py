@@ -13,8 +13,31 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
-# ─── 常量 ───────────────────────────────────────────────
-GAME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+# ─── 路径检测 ────────────────────────────────────────────
+def _detect_game_dir():
+    """自动检测游戏根目录，兼容 .py 运行和 PyInstaller .exe 运行"""
+    # PyInstaller 打包后用 sys.executable 的目录，否则用 __file__ 的目录
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        exe_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 情况1: 运行位置本身就是游戏根目录 (CFS/)
+    candidate = os.path.join(exe_dir, "CFS_Data", "StreamingAssets")
+    if os.path.isdir(candidate):
+        return exe_dir
+
+    # 情况2: 运行位置在子目录 (CFS/Trainer/)
+    parent = os.path.join(exe_dir, "..")
+    candidate = os.path.join(parent, "CFS_Data", "StreamingAssets")
+    if os.path.isdir(candidate):
+        return os.path.normpath(parent)
+
+    # 都找不到，回退到当前目录的父级
+    return os.path.normpath(parent)
+
+
+GAME_DIR = _detect_game_dir()
 STREAMING_ASSETS = os.path.join(GAME_DIR, "CFS_Data", "StreamingAssets")
 BACKUP_DIR = os.path.join(GAME_DIR, "Trainer", "backups")
 
