@@ -9,6 +9,7 @@ import sqlite3
 import shutil
 import os
 import sys
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
@@ -61,6 +62,14 @@ PLAYER_MENTAL_ATTRS = [
     ("Dirtyness", "脏动作"), ("AngerControl", "怒气控制"),
     ("SpeechMaking", "演讲能力"), ("DomesticPopulation", "国内人气"),
     ("InternationalPopulation", "国际人气"),
+]
+
+# 青训球员 PlayerAbilityJSON 中的能力字段
+YOUTH_ABILITY_ATTRS = [
+    ("pace", "速度"), ("shooting", "射门"), ("shortPass", "短传"),
+    ("longPass", "长传"), ("tackling", "抢断"), ("header", "头球"),
+    ("strength", "力量"), ("agility", "敏捷"), ("dribble", "盘带"),
+    ("stamina", "体能"), ("anticipation", "预判"), ("keeping", "门将"),
 ]
 
 
@@ -482,31 +491,28 @@ class TrainerApp:
                   foreground=self.colors["accent"]).pack(pady=15)
 
         items = [
-            ("解锁全部设施", "Facilities 表 → Unlocked=1", self._unlock_facilities),
-            ("解锁全部战术", "TacticsKnowledge 表 → IsUnlocked=1", self._unlock_tactics),
-            ("解锁全部训练方案", "TrainingBuilds 表 → IsUnlocked=1", self._unlock_training),
-            ("解锁全部比赛日方案", "GameDayOperationPlans 表 → IsUnlocked=1", self._unlock_gameday),
-            ("解锁全部物品", "Items 表 → IsUnlocked=1, 库存+99", self._unlock_items),
-            ("解锁全部合作伙伴", "Partners 表 → IsUnlocked=1", self._unlock_partners),
-            ("解锁全部留洋目的地", "AbroadDestinations 表 → Unlocked=1", self._unlock_abroad),
-            ("解锁全部巡回赛", "TourDestinations 表 → Unlocked=1", self._unlock_tours),
-            ("解锁全部地块", "LandInfo 表 → IsUnlocked=1", self._unlock_lands),
-            ("解锁全部建筑", "LandBuildingInfo 表 → IsUnlocked=1", self._unlock_buildings),
-            ("解锁全部青训设施", "YouthFacilities 表 → IsUnlocked=1", self._unlock_youth_facilities),
-            ("完成全部任务", "Missions 表 → MissionComplete=1", self._complete_missions),
-            ("═══ 以上全部一键解锁 ═══", "", self._unlock_everything),
+            ("解锁全部设施", self._unlock_facilities),
+            ("解锁全部战术", self._unlock_tactics),
+            ("解锁全部训练方案", self._unlock_training),
+            ("解锁全部比赛日方案", self._unlock_gameday),
+            ("解锁全部物品（库存+99）", self._unlock_items),
+            ("解锁全部合作伙伴", self._unlock_partners),
+            ("解锁全部留洋目的地", self._unlock_abroad),
+            ("解锁全部巡回赛", self._unlock_tours),
+            ("解锁全部地块", self._unlock_lands),
+            ("解锁全部建筑", self._unlock_buildings),
+            ("解锁全部青训设施", self._unlock_youth_facilities),
+            ("完成全部任务", self._complete_missions),
+            ("═══ 以上全部一键解锁 ═══", self._unlock_everything),
         ]
 
-        for text, desc, cmd in items:
+        for text, cmd in items:
             fr = ttk.Frame(tab)
             fr.pack(fill="x", padx=20, pady=2)
             is_all = "全部一键" in text
             style = "Accent.TButton" if is_all else "TButton"
             btn = ttk.Button(fr, text=text, style=style, command=cmd, width=30)
             btn.pack(side="left", padx=5)
-            if desc:
-                ttk.Label(fr, text=desc, foreground=self.colors["warning"],
-                          font=("Microsoft YaHei UI", 9)).pack(side="left", padx=10)
 
     # ─── Tab 5: 青训 ────────────────────────────────────
     def _build_tab_youth(self):
@@ -572,6 +578,19 @@ class TrainerApp:
 
         # 编辑字段
         self.youth_attr_vars = {}
+        self.youth_ability_vars = {}
+
+        youth_canvas = tk.Canvas(right, bg=self.colors["bg"], highlightthickness=0)
+        youth_scrollbar = ttk.Scrollbar(right, orient="vertical", command=youth_canvas.yview)
+        youth_inner = ttk.Frame(youth_canvas)
+        youth_inner.bind("<Configure>", lambda e: youth_canvas.configure(scrollregion=youth_canvas.bbox("all")))
+        youth_canvas.create_window((0, 0), window=youth_inner, anchor="nw")
+        youth_canvas.configure(yscrollcommand=youth_scrollbar.set)
+        youth_scrollbar.pack(side="right", fill="y")
+        youth_canvas.pack(side="left", fill="both", expand=True)
+        youth_canvas.bind("<MouseWheel>", lambda e: youth_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+
+        ttk.Label(youth_inner, text="── 基本信息 ──", foreground=self.colors["accent"]).pack(pady=(5, 2))
         youth_fields = [
             ("AbilityLevel", "能力等级"), ("PotentialLevel", "潜力等级"),
             ("GrowthLevel", "成长速度"), ("DisciplineLevel", "纪律等级"),
@@ -580,11 +599,20 @@ class TrainerApp:
             ("InvestedMoney", "已投入资金"),
         ]
         for field, label in youth_fields:
-            fr = ttk.Frame(right)
-            fr.pack(fill="x", padx=5, pady=2)
+            fr = ttk.Frame(youth_inner)
+            fr.pack(fill="x", padx=5, pady=1)
             ttk.Label(fr, text=f"{label}：", width=10, anchor="e").pack(side="left")
             var = tk.StringVar()
             self.youth_attr_vars[field] = var
+            ttk.Entry(fr, textvariable=var, width=10).pack(side="left", padx=3)
+
+        ttk.Label(youth_inner, text="── 能力属性 ──", foreground=self.colors["accent"]).pack(pady=(8, 2))
+        for field, label in YOUTH_ABILITY_ATTRS:
+            fr = ttk.Frame(youth_inner)
+            fr.pack(fill="x", padx=5, pady=1)
+            ttk.Label(fr, text=f"{label}：", width=10, anchor="e").pack(side="left")
+            var = tk.StringVar()
+            self.youth_ability_vars[field] = var
             ttk.Entry(fr, textvariable=var, width=10).pack(side="left", padx=3)
 
     # ═══════════════════════════════════════════════════════
@@ -856,7 +884,7 @@ class TrainerApp:
         for field, _ in PLAYER_ATTRS:
             self.player_attr_vars[field].set("150")
         self.player_attr_vars["WeakerFoot"].set("5")
-        self.player_attr_vars["Level"].set("99")
+        self.player_attr_vars["Level"].set("40")
         self.player_attr_vars["ExpPoints"].set("99999")
         self._save_player()
 
@@ -872,7 +900,7 @@ class TrainerApp:
         attr_fields = [f for f, _ in PLAYER_ATTRS]
         sets = [f"{f}=150" for f in attr_fields]
         sets.append("WeakerFoot=5")
-        sets.append("Level=99")
+        sets.append("Level=40")
         sets.append("ExpPoints=99999")
         self.db.execute(
             f"UPDATE Players SET {','.join(sets)} WHERE CurrentTeam=?",
@@ -1065,6 +1093,16 @@ class TrainerApp:
         for field in self.youth_attr_vars:
             val = row[field]
             self.youth_attr_vars[field].set(str(val) if val is not None else "0")
+        # 加载 PlayerAbilityJSON
+        ability = {}
+        if row["PlayerAbilityJSON"]:
+            try:
+                ability = json.loads(row["PlayerAbilityJSON"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        for field in self.youth_ability_vars:
+            val = ability.get(field, 0)
+            self.youth_ability_vars[field].set(str(val) if val is not None else "0")
 
     def _save_youth_player(self):
         if not self._require_db():
@@ -1082,6 +1120,15 @@ class TrainerApp:
                 v = 0
             sets.append(f"{field}=?")
             vals.append(v)
+        # 构建 PlayerAbilityJSON
+        ability_json = {}
+        for field, var in self.youth_ability_vars.items():
+            try:
+                ability_json[field] = float(var.get().replace(",", "").strip())
+            except ValueError:
+                ability_json[field] = 0.0
+        sets.append("PlayerAbilityJSON=?")
+        vals.append(json.dumps(ability_json))
         vals.append(yid)
         self.db.execute(f"UPDATE YouthPlayers SET {','.join(sets)} WHERE ID=?", vals)
         self.db.commit()
@@ -1100,10 +1147,18 @@ class TrainerApp:
         self.youth_attr_vars["GrowthLevel"].set("10")
         self.youth_attr_vars["DisciplineLevel"].set("10")
         self.youth_attr_vars["FinancialLevel"].set("10")
+        for field, _ in YOUTH_ABILITY_ATTRS:
+            self.youth_ability_vars[field].set("99.0")
         self._save_youth_player()
 
     def _max_youth(self):
         if not self._require_db(): return
+        max_ability_json = json.dumps({
+            "pace": 99.0, "anticipation": 99.0, "tackling": 99.0,
+            "header": 99.0, "shortPass": 99.0, "longPass": 99.0,
+            "strength": 99.0, "agility": 99.0, "shooting": 99.0,
+            "stamina": 99.0, "dribble": 99.0, "keeping": 99.0
+        })
         filter_type = self.youth_filter.get()
         if filter_type == "我的青训球员":
             msg = "将我的青训球员的潜力和成长拉满？"
@@ -1115,8 +1170,8 @@ class TrainerApp:
             self.db.execute(
                 "UPDATE YouthPlayers SET PotentialLevel=10,GrowthLevel=10,"
                 "AbilityLevel=CASE WHEN AbilityLevel<8 THEN 8 ELSE AbilityLevel END,"
-                "DisciplineLevel=10 WHERE AssociatedTeamID=?",
-                (misc["UserTeamID"],)
+                "DisciplineLevel=10,PlayerAbilityJSON=? WHERE AssociatedTeamID=?",
+                (max_ability_json, misc["UserTeamID"])
             )
         else:
             if not messagebox.askyesno("确认", "将全部青训球员的潜力和成长拉满？"):
@@ -1124,7 +1179,8 @@ class TrainerApp:
             self.db.execute(
                 "UPDATE YouthPlayers SET PotentialLevel=10,GrowthLevel=10,"
                 "AbilityLevel=CASE WHEN AbilityLevel<8 THEN 8 ELSE AbilityLevel END,"
-                "DisciplineLevel=10"
+                "DisciplineLevel=10,PlayerAbilityJSON=?",
+                (max_ability_json,)
             )
         self.db.commit()
         self._load_youth()
